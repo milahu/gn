@@ -737,8 +737,14 @@ def WriteGNNinja(path, platform, host, options, args_list):
         'src/util/sys_info.cc',
         'src/util/ticks.cc',
         'src/util/worker_pool.cc',
+        'src/util/tokenpool-gnu-make.cc',
       ]},
   }
+
+  if platform.is_windows():
+    static_libraries['gn_lib']['sources'].append('src/util/tokenpool-gnu-make-win32.cc')
+  else:
+    static_libraries['gn_lib']['sources'].append('src/util/tokenpool-gnu-make-posix.cc')
 
   executables = {
       'gn': {'sources': [ 'src/gn/gn_main.cc' ], 'libs': []},

@@ -90,6 +90,36 @@ WorkerPool::WorkerPool(size_t thread_count) : should_stop_processing_(false) {
   ProcessorGroupSetter processor_group_setter;
 #endif
 
+  // dynamic pool size with gnumake jobclient
+  bool ignore_jobserver = false;
+  bool verbose_jobclient = true;
+  double load_avg_ = 0.0;
+  size_t max_thread_count = thread_count;
+
+  tokenpool_ = TokenPool::Get();
+
+  if (!tokenpool_->SetupClient(ignore_jobserver, verbose_jobclient, load_avg_)) {
+    delete tokenpool_;
+    tokenpool_ = NULL;
+    printf("gn: jobclient: init failed. jobserver off?\n");
+  }
+  printf("gn: jobclient: init ok\n");
+
+  if (tokenpool_ != NULL) {
+    thread_count = 1; // start small
+    // acquire tokens to add threads
+    int token;
+    while (thread_count < max_thread_count) {
+      token = tokenpool_->AcquireToken();
+      if (token < 0) break; // jobserver is full, try again later
+      tokens_.push_back(token);
+      thread_count++;
+    }
+    printf("gn: jobclient: acquired %li tokens -> thread_count = %li\n", tokens_.size(), thread_count);
+  }
+
+  // TODO later: try to grow pool = add more threads
+
   threads_.reserve(thread_count);
   for (size_t i = 0; i < thread_count; ++i) {
     threads_.emplace_back([this]() { Worker(); });
@@ -114,6 +144,22 @@ WorkerPool::~WorkerPool() {
 
   for (auto& task_thread : threads_) {
     task_thread.join();
+  }
+
+  if (tokenpool_ != NULL) {
+    // release tokens back to jobserver
+    printf("gn: jobclient: releasing %li tokens\n", tokens_.size());
+    int token;
+    while (tokens_.size() > 0) {
+      token = tokens_.back();
+      tokenpool_->ReleaseToken(token);
+      tokens_.pop_back();
+    }
+    printf("gn: jobclient: released all tokens\n");
+
+    // cleanup
+    delete tokenpool_;
+    tokenpool_ = NULL;
   }
 }
 

@@ -13,6 +13,8 @@
 
 #include "base/logging.h"
 
+#include "tokenpool.h"
+
 class WorkerPool {
  public:
   WorkerPool();
@@ -29,6 +31,9 @@ class WorkerPool {
   std::mutex queue_mutex_;
   std::condition_variable_any pool_notifier_;
   bool should_stop_processing_;
+
+  TokenPool* tokenpool_;
+  std::vector<int> tokens_;
 
   WorkerPool(const WorkerPool&) = delete;
   WorkerPool& operator=(const WorkerPool&) = delete;
